@@ -168,17 +168,24 @@ class BillIn(BaseModel):
 # Auth routes
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+DUMMY_HASH = bcrypt.hashpw(b"placeholder", bcrypt.gensalt())
+
 @app.post("/api/auth/login")
 def login(body: LoginIn, response: Response, db=Depends(get_db)):
     """Step 1 — validate username + password, issue short-lived MFA pending cookie."""
     user = db.execute(
         "SELECT * FROM users WHERE username=?", (body.username.strip(),)
     ).fetchone()
-    # Constant-time guard — always check even on missing user
-    dummy_hash = b"$2b$12$placeholderplaceholderplaceholderplaceholder"
+    
     candidate  = body.password.encode()
-    valid_hash = user["password_hash"].encode() if user else dummy_hash
-    ok = bcrypt.checkpw(candidate, valid_hash) and bool(user)
+    valid_hash = user["password_hash"].encode() if user else DUMMY_HASH
+    
+    # Catch any potential bcrypt errors just in case
+    try:
+        ok = bcrypt.checkpw(candidate, valid_hash) and bool(user)
+    except ValueError:
+        ok = False
+
     if not ok:
         raise HTTPException(401, "Invalid username or password")
 

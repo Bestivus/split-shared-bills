@@ -38,8 +38,8 @@
     }
 
     /* ── Views ── */
-    .view { display: none; position: relative; z-index: 1; }
-    .view.active { display: block; }
+    .view { position: relative; z-index: 1; }
+    .view:not(.active) { display: none !important; }
 
     /* ── Auth shell ── */
     .auth-shell {

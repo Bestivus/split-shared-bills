@@ -293,7 +293,7 @@ def update_person(body: PersonIn, user=Depends(require_auth), db=Depends(get_db)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Bills routes
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VALID_BILL_FREQ = {"monthly", "quarterly", "yearly"}
+VALID_BILL_FREQ = {"bi-weekly", "monthly", "quarterly", "yearly"}
 
 @app.get("/api/bills")
 def get_bills(user=Depends(require_auth), db=Depends(get_db)):
@@ -345,7 +345,12 @@ def _validate_bill(body: BillIn):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Calculation route
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-_FREQ_MULTIPLIER = {"monthly": 1.0, "quarterly": 1 / 3, "yearly": 1 / 12}
+_FREQ_MULTIPLIER = {
+    "bi-weekly": 26 / 12,
+    "monthly": 1.0, 
+    "quarterly": 1 / 3, 
+    "yearly": 1 / 12
+}
 
 @app.get("/api/calculate")
 def calculate(user=Depends(require_auth), db=Depends(get_db)):

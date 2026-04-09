@@ -691,6 +691,7 @@ function addBillRow(bill = null) {
     <input type="number" id="bamt-${tmpId}"   placeholder="Amount" value="${bill?.amount ?? ''}"
            min="0" step="0.01" oninput="debounceSaveBill('${tmpId}')" />
     <select id="bfreq-${tmpId}" onchange="debounceSaveBill('${tmpId}')">
+      <option value="bi-weekly" ${bill?.frequency==='bi-weekly'?'selected':''}>Bi-weekly</option>
       <option value="monthly"   ${bill?.frequency==='monthly'  ?'selected':''}>Monthly</option>
       <option value="quarterly" ${bill?.frequency==='quarterly'?'selected':''}>Quarterly</option>
       <option value="yearly"    ${bill?.frequency==='yearly'   ?'selected':''}>Yearly</option>

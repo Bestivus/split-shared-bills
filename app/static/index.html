@@ -272,9 +272,20 @@
 
     /* Ratio bar */
     .ratio-bar-wrap { margin-bottom: 20px; }
-    .ratio-label { display: flex; justify-content: space-between; font-size: .7rem; font-family: 'DM Mono', monospace; color: var(--muted); margin-bottom: 5px; }
-    .ratio-bar { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
-    .ratio-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .ratio-label { display: flex; justify-content: space-between; font-size: .7rem; font-family: 'DM Mono', monospace; font-weight: 500; margin-bottom: 8px; }
+    .ratio-bar { height: 6px; background: var(--surface2); border-radius: 99px; display: flex; position: relative; }
+    
+    /* Dedicated colors for each person */
+    .ratio-fill-1 { background: var(--gold); transition: width .6s cubic-bezier(.4,0,.2,1); border-radius: 99px 0 0 99px; }
+    .ratio-fill-2 { background: var(--green); transition: width .6s cubic-bezier(.4,0,.2,1); border-radius: 0 99px 99px 0; }
+    
+    /* The crisp vertical line */
+    .ratio-divider {
+      position: absolute; top: -3px; bottom: -3px; width: 3px;
+      background: var(--cream); border-radius: 2px;
+      transition: left .6s cubic-bezier(.4,0,.2,1); transform: translateX(-50%);
+      box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    }
 
     /* Breakdown table */
     .breakdown-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
@@ -784,10 +795,14 @@ function renderResults() {
   // ── Ratio bar
   $('ratio-bar').innerHTML = `
     <div class="ratio-label">
-      <span>${esc(p1.name||'Person 1')} — ${(p1.pct*100).toFixed(1)}%</span>
-      <span>${(p2.pct*100).toFixed(1)}% — ${esc(p2.name||'Person 2')}</span>
+      <span style="color:var(--gold)">${esc(p1.name||'Person 1')} — ${(p1.pct*100).toFixed(1)}%</span>
+      <span style="color:var(--green)">${(p2.pct*100).toFixed(1)}% — ${esc(p2.name||'Person 2')}</span>
     </div>
-    <div class="ratio-bar"><div class="ratio-fill" style="width:${p1.pct*100}%"></div></div>
+    <div class="ratio-bar">
+      <div class="ratio-fill-1" style="width:${p1.pct*100}%"></div>
+      <div class="ratio-fill-2" style="width:${p2.pct*100}%"></div>
+      <div class="ratio-divider" style="left:${p1.pct*100}%"></div>
+    </div>
   `;
 
   // ── Result cards
@@ -847,13 +862,19 @@ function resultCard(p, isPaycheck, freqLabel) {
   const label   = isPaycheck ? `per ${freqLabel} paycheck` : 'per month to shared account';
   const monthly = isPaycheck ? `(${fmt(p.contrib_monthly)}/mo)` : '';
   const remain  = p.monthly_income - p.contrib_monthly;
+  
+  // Tie the text colors back to the ratio bar
+  const color = p.slot === 1 ? 'var(--gold)' : 'var(--green)';
 
   return `
     <div class="result-card">
-      <div class="result-name">${esc(p.name || 'Person ' + p.slot)}</div>
+      <div class="result-name" style="color:${color}">${esc(p.name || 'Person ' + p.slot)}</div>
       <div class="result-amount"><span class="sym">$</span>${fmtNum(amount)}</div>
       <div class="result-sub">${label} ${monthly}</div>
-      <div class="result-pct">↳ ${(p.pct*100).toFixed(1)}% of income · ${fmt(remain)} remaining/mo</div>
+      <div class="result-pct" style="line-height: 1.6; margin-top: 12px;">
+        <span style="color:var(--muted)">↳ Pays ${(p.pct*100).toFixed(1)}% of shared bills</span><br>
+        <span style="color:${color}">↳ ${fmt(remain)} kept for personal use/mo</span>
+      </div>
     </div>
   `;
 }

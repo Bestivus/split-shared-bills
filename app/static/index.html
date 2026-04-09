@@ -200,8 +200,32 @@
       align-items: center; animation: slideIn .2s ease;
     }
     @media(max-width:640px) {
-      .bill-row { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
-      .bill-row .btn-remove { grid-column: 2; justify-self: end; grid-row: 1; }
+      .bill-row { 
+        grid-template-columns: 1fr 1fr auto; 
+        grid-template-rows: auto auto; 
+        gap: 10px;
+        background: var(--surface2); /* Gives it a distinct card feel on mobile */
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+  
+      /* Make the bill name span the entire top row */
+      .bill-row > input[type="text"] {
+        grid-column: 1 / -1;
+        grid-row: 1;
+      }
+  
+      /* Amount and Frequency sit side-by-side on row 2 */
+      .bill-row > input[type="number"] { grid-column: 1; grid-row: 2; }
+      .bill-row > select { grid-column: 2; grid-row: 2; }
+  
+      /* Delete button stays anchored to the bottom right */
+      .bill-row .btn-remove { 
+        grid-column: 3; 
+        grid-row: 2; 
+        justify-self: end;
+      }
     }
     @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
 
@@ -295,7 +319,12 @@
     }
     .breakdown-table thead th:not(:first-child) { text-align: right; }
     .breakdown-table tbody tr { border-bottom: 1px solid rgba(46,44,41,.5); }
-    .breakdown-table tbody td { padding: 9px 0; font-family: 'DM Mono', monospace; color: var(--cream); }
+    .breakdown-table tbody td { 
+      padding: 10px 8px; /* Added left/right padding */
+      font-family: 'DM Mono', monospace; 
+      color: var(--cream); 
+      white-space: nowrap; /* Forces numbers to stay on one line */
+    }
     .breakdown-table tbody td:not(:first-child) { text-align: right; color: var(--muted); }
     .breakdown-table tbody td:first-child { font-family: 'DM Sans', sans-serif; }
     .breakdown-table tbody .freq-badge {
@@ -304,7 +333,10 @@
       padding: 1px 5px; color: var(--muted); margin-left: 6px; vertical-align: middle;
     }
     .breakdown-table tfoot td {
-      padding-top: 12px; font-family: 'DM Mono', monospace; font-weight: 500; color: var(--gold);
+      padding: 12px 8px; /* Added left/right padding here too */
+      font-family: 'DM Mono', monospace; 
+      font-weight: 500; 
+      color: var(--gold);
     }
     .breakdown-table tfoot td:not(:first-child) { text-align: right; }
 
@@ -326,6 +358,42 @@
 
     /* Divider */
     .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+    /* ── Mobile Receipt Table ── */
+    @media(max-width: 600px) {
+      /* Hide the top horizontal headers */
+      .breakdown-table thead { display: none; }
+      
+      /* Change rows from horizontal bands to vertical flex columns */
+      .breakdown-table tbody tr, .breakdown-table tfoot tr {
+        display: flex; flex-direction: column; gap: 8px;
+        padding: 16px 0;
+      }
+      
+      /* Make each cell a flex container (Label on left, Number on right) */
+      .breakdown-table td {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0 !important; text-align: right;
+      }
+      
+      /* Style the Bill Name to look like a card header */
+      .breakdown-table tbody td:first-child {
+        font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--gold);
+        border-bottom: 1px dashed rgba(201,168,76,.3); 
+        padding-bottom: 10px !important; margin-bottom: 4px;
+      }
+      
+      /* Magically pull the data-label attribute and display it on the left side */
+      .breakdown-table td:not(:first-child)::before,
+      .breakdown-table tfoot td::before {
+        content: attr(data-label);
+        font-family: 'DM Sans', sans-serif; font-size: .75rem; 
+        color: var(--muted); text-transform: uppercase; letter-spacing: .08em;
+      }
+      
+      /* Hide elements we don't need on mobile */
+      .hide-mobile { display: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -823,10 +891,10 @@ function renderResults() {
   d.bills.forEach(b => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${esc(b.name)}<span class="freq-badge">${b.frequency}</span></td>
-      <td>${fmt(b.monthly_amount)}</td>
-      <td>${fmt(b.share1)}</td>
-      <td>${fmt(b.share2)}</td>
+      <td data-label="Bill">${esc(b.name)}<span class="freq-badge">${b.frequency}</span></td>
+      <td data-label="Total">${fmt(b.monthly_amount)}</td>
+      <td data-label="${esc(p1.name||'Person 1')}">${fmt(b.share1)}</td>
+      <td data-label="${esc(p2.name||'Person 2')}">${fmt(b.share2)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -834,15 +902,15 @@ function renderResults() {
   // ── Totals
   $('breakdown-foot').innerHTML = `
     <tr>
-      <td>Total / month</td>
-      <td>${fmt(d.total_monthly)}</td>
-      <td>${fmt(p1.contrib_monthly)}</td>
-      <td>${fmt(p2.contrib_monthly)}</td>
+      <td class="hide-mobile">Total / month</td>
+      <td data-label="Combined Total">${fmt(d.total_monthly)}</td>
+      <td data-label="${esc(p1.name||'P1')} Total">${fmt(p1.contrib_monthly)}</td>
+      <td data-label="${esc(p2.name||'P2')} Total">${fmt(p2.contrib_monthly)}</td>
     </tr>
     <tr>
-      <td style="color:var(--muted);font-size:.78rem">Annual total</td>
-      <td style="color:var(--muted);font-size:.78rem">${fmt(d.total_annual)}</td>
-      <td colspan="2"></td>
+      <td class="hide-mobile" style="color:var(--muted);font-size:.78rem">Annual total</td>
+      <td data-label="Annual Total" style="color:var(--muted);font-size:.78rem">${fmt(d.total_annual)}</td>
+      <td class="hide-mobile" colspan="2"></td>
     </tr>
   `;
 

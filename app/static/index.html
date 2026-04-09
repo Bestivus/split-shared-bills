@@ -605,14 +605,19 @@ async function doLogout() {
 
 // ── App load ──────────────────────────────────────────────────────
 async function loadApp() {
-  showView('view-app');
-  $('app-username').textContent = currentUser.username;
-  const [people, bills] = await Promise.all([
-    api('GET', '/api/people'),
-    api('GET', '/api/bills'),
-  ]);
-  renderIncome(people);
-  renderBills(bills);
+  try {
+    showView('view-app');
+    $('app-username').textContent = currentUser.username;
+    
+    // Fetch sequentially instead of concurrently to prevent NFS lock collisions
+    const people = await api('GET', '/api/people');
+    const bills  = await api('GET', '/api/bills');
+    
+    renderIncome(people);
+    renderBills(bills);
+  } catch (e) {
+    alert("Error loading app data: " + e.message);
+  }
 }
 
 // ── Income ────────────────────────────────────────────────────────

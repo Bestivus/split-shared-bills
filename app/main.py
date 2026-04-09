@@ -41,9 +41,14 @@ def _connect() -> sqlite3.Connection:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    
+    # Bump the timeout to 15 seconds to ride out any NFS latency
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=15.0)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    
+    # CRITICAL: WAL mode breaks over NFS. Use TRUNCATE instead.
+    conn.execute("PRAGMA journal_mode=TRUNCATE")
+    conn.execute("PRAGMA busy_timeout=15000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 

@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Split — Shared Expense Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #0f0e0d;
+      --surface:  #1a1917;
+      --surface2: #232220;
+      --border:   #2e2c29;
+      --gold:     #c9a84c;
+      --gold-dim: #7a622b;
+      --cream:    #f0ead8;
+      --muted:    #7a7570;
+      --green:    #4caf82;
+      --red:      #cf6a5e;
+      --r:        12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--cream);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      min-height: 100vh;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 10%, rgba(201,168,76,.07) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 60% at 80% 80%, rgba(76,175,130,.05) 0%, transparent 70%);
+    }
+
+    /* ── Views ── */
+    .view { display: none; position: relative; z-index: 1; }
+    .view.active { display: block; }
+
+    /* ── Auth shell ── */
+    .auth-shell {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 16px;
+    }
+    .auth-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 3rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--gold), #e8d08a, var(--gold));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 6px;
+    }
+    .auth-tagline {
+      font-size: .75rem; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 36px;
+    }
+    .auth-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 32px; width: 100%; max-width: 400px;
+    }
+    .auth-title {
+      font-family: 'Playfair Display', serif; font-size: 1.25rem;
+      color: var(--gold); margin-bottom: 6px;
+    }
+    .auth-sub {
+      font-size: .8rem; color: var(--muted); margin-bottom: 24px; line-height: 1.6;
+    }
+
+    /* ── Form elements ── */
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .field label { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    input[type="text"], input[type="password"], input[type="number"],
+    input[type="tel"], select {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--cream); font-family: 'DM Mono', monospace;
+      font-size: .95rem; padding: 10px 14px; outline: none;
+      transition: border-color .2s; -webkit-appearance: none;
+    }
+    input::placeholder { color: var(--muted); font-family: 'DM Sans', sans-serif; }
+    input:focus, select:focus { border-color: var(--gold-dim); }
+    select option { background: #1a1917; }
+
+    .btn-primary {
+      width: 100%; background: linear-gradient(135deg, #b8922e, var(--gold));
+      border: none; border-radius: var(--r); color: #0f0e0d;
+      font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600;
+      padding: 14px; cursor: pointer; transition: opacity .2s, transform .15s;
+      margin-top: 8px;
+    }
+    .btn-primary:hover { opacity: .92; }
+    .btn-primary:active { transform: scale(.99); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border); border-radius: 8px;
+      color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: .85rem;
+      padding: 8px 16px; cursor: pointer; transition: border-color .2s, color .2s;
+    }
+    .btn-ghost:hover { border-color: var(--gold-dim); color: var(--cream); }
+
+    .error-msg {
+      background: rgba(207,106,94,.1); border: 1px solid rgba(207,106,94,.3);
+      border-radius: 8px; padding: 10px 14px; font-size: .82rem; color: var(--red);
+      margin-bottom: 14px; display: none;
+    }
+    .error-msg.visible { display: block; }
+
+    /* ── MFA QR ── */
+    .qr-wrap {
+      background: #fff; border-radius: 10px; padding: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 16px auto; max-width: 200px;
+    }
+    .qr-wrap svg { width: 100%; height: auto; display: block; }
+    .secret-box {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: .85rem; color: var(--gold);
+      letter-spacing: .1em; margin-bottom: 14px; word-break: break-all;
+    }
+    .mfa-hint {
+      font-size: .75rem; color: var(--muted); text-align: center;
+      line-height: 1.6; margin-bottom: 16px;
+    }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       App shell
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    #view-app {
+      display: flex; flex-direction: column;
+      align-items: center; padding: 48px 16px 80px;
+    }
+    .wrapper { width: 100%; max-width: 880px; }
+
+    /* App header */
+    .app-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 52px;
+    }
+    .app-header-center { text-align: center; flex: 1; }
+    .logo {
+      display: inline-block;
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.6rem, 7vw, 4.5rem); font-weight: 700;
+      background: linear-gradient(135deg, var(--gold), #e8d08a, var(--gold));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      line-height: 1;
+    }
+    .tagline { font-size: .75rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
+    .user-chip {
+      font-size: .75rem; color: var(--muted); font-family: 'DM Mono', monospace;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .user-chip button {
+      background: transparent; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: .72rem; padding: 3px 10px; cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .user-chip button:hover { border-color: var(--red); color: var(--red); }
+
+    /* Cards */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 28px 32px; margin-bottom: 20px;
+      position: relative;
+    }
+    .card-title {
+      font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--gold);
+      margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+    }
+    .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Save indicator */
+    .save-indicator {
+      position: absolute; top: 16px; right: 20px;
+      font-size: .68rem; font-family: 'DM Mono', monospace;
+      color: var(--muted); opacity: 0; transition: opacity .3s;
+    }
+    .save-indicator.saving { color: var(--gold-dim); opacity: 1; }
+    .save-indicator.saved  { color: var(--green); opacity: 1; }
+
+    /* Income grid */
+    .income-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media(max-width:600px) { .income-grid { grid-template-columns: 1fr; } }
+    .person-block { display: flex; flex-direction: column; gap: 12px; }
+    .person-label { font-size: .68rem; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+    .field-row { display: flex; flex-direction: column; gap: 5px; }
+    .field-hint { font-size: .7rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+    /* Bills */
+    .bills-list { display: flex; flex-direction: column; gap: 10px; }
+    .bill-row {
+      display: grid; grid-template-columns: 1fr 120px 130px auto; gap: 8px;
+      align-items: center; animation: slideIn .2s ease;
+    }
+    @media(max-width:640px) {
+      .bill-row { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+      .bill-row .btn-remove { grid-column: 2; justify-self: end; grid-row: 1; }
+    }
+    @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+
+    .btn-remove {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; width: 36px; height: 36px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 1rem;
+      transition: border-color .2s, color .2s; flex-shrink: 0;
+    }
+    .btn-remove:hover { border-color: var(--red); color: var(--red); }
+
+    .btn-add {
+      margin-top: 12px; background: transparent; border: 1px dashed var(--gold-dim);
+      color: var(--gold); border-radius: 8px; padding: 9px 18px;
+      font-family: 'DM Sans', sans-serif; font-size: .85rem;
+      cursor: pointer; transition: border-color .2s, background .2s;
+    }
+    .btn-add:hover { border-color: var(--gold); background: rgba(201,168,76,.06); }
+
+    /* Calculate button */
+    .btn-calc {
+      width: 100%; background: linear-gradient(135deg, #b8922e, var(--gold));
+      border: none; border-radius: var(--r); color: #0f0e0d;
+      font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 600;
+      padding: 16px; cursor: pointer; margin-top: 8px;
+      transition: opacity .2s, transform .15s;
+    }
+    .btn-calc:hover { opacity: .92; }
+    .btn-calc:active { transform: scale(.99); }
+
+    /* Results */
+    #results { display: none; }
+    #results.visible { display: block; }
+
+    /* View toggle */
+    .view-toggle {
+      display: flex; gap: 4px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px; padding: 3px;
+      margin-left: auto;
+    }
+    .toggle-btn {
+      background: transparent; border: none; border-radius: 6px;
+      color: var(--muted); font-size: .72rem; font-family: 'DM Mono', monospace;
+      padding: 5px 12px; cursor: pointer; transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .toggle-btn.active { background: var(--gold); color: #0f0e0d; font-weight: 500; }
+
+    .results-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .results-label { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--gold); }
+
+    /* Result cards */
+    .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    @media(max-width:520px) { .results-grid { grid-template-columns: 1fr; } }
+    .result-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 20px 24px; position: relative; overflow: hidden;
+    }
+    .result-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    }
+    .result-name { font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .result-amount { font-family: 'DM Mono', monospace; font-size: 2rem; font-weight: 500; color: var(--cream); line-height: 1; }
+    .result-amount .sym { font-size: 1rem; color: var(--gold); }
+    .result-sub { margin-top: 6px; font-size: .75rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+    .result-pct { margin-top: 8px; font-size: .78rem; color: var(--green); }
+
+    /* Ratio bar */
+    .ratio-bar-wrap { margin-bottom: 20px; }
+    .ratio-label { display: flex; justify-content: space-between; font-size: .7rem; font-family: 'DM Mono', monospace; color: var(--muted); margin-bottom: 5px; }
+    .ratio-bar { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .ratio-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+
+    /* Breakdown table */
+    .breakdown-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    .breakdown-table thead th {
+      text-align: left; font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted); padding: 0 0 10px; border-bottom: 1px solid var(--border);
+    }
+    .breakdown-table thead th:not(:first-child) { text-align: right; }
+    .breakdown-table tbody tr { border-bottom: 1px solid rgba(46,44,41,.5); }
+    .breakdown-table tbody td { padding: 9px 0; font-family: 'DM Mono', monospace; color: var(--cream); }
+    .breakdown-table tbody td:not(:first-child) { text-align: right; color: var(--muted); }
+    .breakdown-table tbody td:first-child { font-family: 'DM Sans', sans-serif; }
+    .breakdown-table tbody .freq-badge {
+      display: inline-block; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+      padding: 1px 5px; color: var(--muted); margin-left: 6px; vertical-align: middle;
+    }
+    .breakdown-table tfoot td {
+      padding-top: 12px; font-family: 'DM Mono', monospace; font-weight: 500; color: var(--gold);
+    }
+    .breakdown-table tfoot td:not(:first-child) { text-align: right; }
+
+    .notice {
+      background: rgba(201,168,76,.05); border: 1px solid rgba(201,168,76,.12);
+      border-radius: 8px; padding: 12px 16px; font-size: .78rem; color: var(--muted);
+      margin-top: 12px; line-height: 1.65;
+    }
+
+    footer { margin-top: 48px; text-align: center; font-size: .7rem; color: var(--muted); letter-spacing: .06em; }
+
+    /* Loader */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border);
+      border-top-color: var(--gold); border-radius: 50%;
+      animation: spin .7s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     VIEW: LOGIN
+══════════════════════════════════════════ -->
+<div id="view-login" class="view auth-shell">
+  <div class="auth-logo">Split</div>
+  <div class="auth-tagline">Shared Expense Calculator</div>
+  <div class="auth-card">
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-sub">Sign in to view and manage your shared bills.</div>
+    <div class="error-msg" id="login-err"></div>
+    <div class="field">
+      <label for="login-user">Username</label>
+      <input type="text" id="login-user" autocomplete="username" placeholder="your username" />
+    </div>
+    <div class="field">
+      <label for="login-pass">Password</label>
+      <input type="password" id="login-pass" autocomplete="current-password" placeholder="••••••••" />
+    </div>
+    <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     VIEW: MFA VERIFY (returning user)
+══════════════════════════════════════════ -->
+<div id="view-mfa-verify" class="view auth-shell">
+  <div class="auth-logo">Split</div>
+  <div class="auth-tagline">Two-factor Authentication</div>
+  <div class="auth-card">
+    <div class="auth-title">Enter your code</div>
+    <div class="auth-sub">Open your authenticator app and enter the 6-digit code for <strong style="color:var(--cream)" id="mfa-verify-username"></strong>.</div>
+    <div class="error-msg" id="mfa-verify-err"></div>
+    <div class="field">
+      <label for="mfa-verify-code">Authentication code</label>
+      <input type="tel" id="mfa-verify-code" maxlength="6" placeholder="000000" autocomplete="one-time-code" inputmode="numeric" />
+    </div>
+    <button class="btn-primary" onclick="doVerifyMFA()">Verify</button>
+    <div style="margin-top:14px; text-align:center;">
+      <button class="btn-ghost" onclick="showView('view-login')">← Back to login</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     VIEW: MFA SETUP (first time)
+══════════════════════════════════════════ -->
+<div id="view-mfa-setup" class="view auth-shell">
+  <div class="auth-logo">Split</div>
+  <div class="auth-tagline">Set Up Two-Factor Authentication</div>
+  <div class="auth-card">
+    <div class="auth-title">Secure your account</div>
+    <div class="auth-sub">Scan the QR code with <strong style="color:var(--cream)">Google Authenticator</strong>, <strong style="color:var(--cream)">Authy</strong>, or any TOTP app. Then enter the 6-digit code to confirm.</div>
+    <div class="error-msg" id="mfa-setup-err"></div>
+    <div id="qr-loading" style="text-align:center;padding:20px 0;color:var(--muted);font-size:.85rem;">
+      <span class="spinner"></span> Loading…
+    </div>
+    <div id="qr-content" style="display:none">
+      <div class="qr-wrap" id="qr-svg-wrap"></div>
+      <div class="mfa-hint">Can't scan? Enter this key manually:</div>
+      <div class="secret-box" id="mfa-secret-display"></div>
+    </div>
+    <div class="field">
+      <label for="mfa-setup-code">Confirm code from app</label>
+      <input type="tel" id="mfa-setup-code" maxlength="6" placeholder="000000" inputmode="numeric" />
+    </div>
+    <button class="btn-primary" onclick="doConfirmMFA()">Activate Two-Factor Auth</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     VIEW: MAIN APP
+══════════════════════════════════════════ -->
+<div id="view-app" class="view">
+  <div class="wrapper">
+
+    <div class="app-header">
+      <div style="width:80px"></div>
+      <div class="app-header-center">
+        <div class="logo">Split</div>
+        <div class="tagline">Shared Expense Calculator</div>
+      </div>
+      <div class="user-chip">
+        <span id="app-username"></span>
+        <button onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
+
+    <!-- Income -->
+    <div class="card">
+      <div class="save-indicator" id="income-save-ind"></div>
+      <div class="card-title">Income</div>
+      <div class="income-grid" id="income-grid">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Bills -->
+    <div class="card">
+      <div class="save-indicator" id="bills-save-ind"></div>
+      <div class="card-title">Shared Bills</div>
+      <div class="bills-list" id="bills-list"></div>
+      <button class="btn-add" onclick="addBill()">+ Add Bill</button>
+    </div>
+
+    <!-- Calculate -->
+    <button class="btn-calc" onclick="calculate()">Calculate Contributions</button>
+
+    <!-- Results -->
+    <div id="results">
+      <div class="card" style="margin-top:28px">
+
+        <div class="results-header">
+          <span class="results-label">Monthly Contributions</span>
+          <div class="view-toggle">
+            <button class="toggle-btn active" id="toggle-monthly"  onclick="setViewMode('monthly')">Monthly</button>
+            <button class="toggle-btn"         id="toggle-paycheck" onclick="setViewMode('paycheck')">Per Paycheck</button>
+          </div>
+        </div>
+
+        <div class="ratio-bar-wrap" id="ratio-bar"></div>
+        <div class="results-grid"   id="results-grid"></div>
+
+        <div class="card-title" style="margin-top:4px">Bill Breakdown</div>
+        <table class="breakdown-table">
+          <thead>
+            <tr>
+              <th>Bill</th>
+              <th>Monthly</th>
+              <th id="hdr1">—</th>
+              <th id="hdr2">—</th>
+            </tr>
+          </thead>
+          <tbody id="breakdown-body"></tbody>
+          <tfoot id="breakdown-foot"></tfoot>
+        </table>
+
+        <div class="notice" id="notice-box"></div>
+      </div>
+    </div>
+
+    <footer>Split &mdash; built for home labs &amp; honest households</footer>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     JavaScript
+═══════════════════════════════════════════════════════════════════ -->
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let calcData      = null;
+let viewMode      = 'monthly';   // 'monthly' | 'paycheck'
+let currentUser   = null;
+let billTimers    = {};
+let incomeTimers  = {};
+
+// ── Utilities ─────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (r.status === 204) return null;
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+}
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function showErr(id, msg) {
+  const el = $(id);
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function clearErr(id) { $(id).classList.remove('visible'); }
+
+// ── Startup ───────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  // Enter on login
+  $('login-pass').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
+  $('mfa-verify-code').addEventListener('keydown', e => e.key === 'Enter' && doVerifyMFA());
+  $('mfa-setup-code').addEventListener('keydown', e => e.key === 'Enter' && doConfirmMFA());
+
+  // Auto-format MFA codes: numbers only, max 6
+  [$('mfa-verify-code'), $('mfa-setup-code')].forEach(inp => {
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/\D/g, '').slice(0, 6);
+    });
+  });
+
+  try {
+    currentUser = await api('GET', '/api/auth/me');
+    await loadApp();
+  } catch {
+    showView('view-login');
+  }
+});
+
+// ── Auth flows ────────────────────────────────────────────────────
+async function doLogin() {
+  clearErr('login-err');
+  const username = $('login-user').value.trim();
+  const password = $('login-pass').value;
+  if (!username || !password) return showErr('login-err', 'Please enter your username and password.');
+
+  $('login-btn').disabled = true;
+  $('login-btn').textContent = 'Signing in…';
+  try {
+    const r = await api('POST', '/api/auth/login', { username, password });
+    $('mfa-verify-username').textContent = username;
+    if (r.status === 'mfa_setup_required') {
+      await loadMFASetup();
+    } else {
+      showView('view-mfa-verify');
+      setTimeout(() => $('mfa-verify-code').focus(), 100);
+    }
+  } catch (e) {
+    showErr('login-err', e.message);
+  } finally {
+    $('login-btn').disabled = false;
+    $('login-btn').textContent = 'Sign In';
+  }
+}
+
+async function loadMFASetup() {
+  showView('view-mfa-setup');
+  $('qr-loading').style.display = 'block';
+  $('qr-content').style.display = 'none';
+  clearErr('mfa-setup-err');
+  try {
+    const r = await api('GET', '/api/auth/setup-mfa');
+    $('qr-svg-wrap').innerHTML = r.qr_svg;
+    $('mfa-secret-display').textContent = r.secret.match(/.{1,4}/g).join(' ');
+    $('qr-loading').style.display  = 'none';
+    $('qr-content').style.display  = 'block';
+    setTimeout(() => $('mfa-setup-code').focus(), 100);
+  } catch (e) {
+    $('qr-loading').style.display = 'none';
+    showErr('mfa-setup-err', e.message);
+  }
+}
+
+async function doConfirmMFA() {
+  clearErr('mfa-setup-err');
+  const code = $('mfa-setup-code').value;
+  if (code.length !== 6) return showErr('mfa-setup-err', 'Please enter the 6-digit code from your app.');
+  try {
+    await api('POST', '/api/auth/confirm-mfa', { code });
+    currentUser = await api('GET', '/api/auth/me');
+    await loadApp();
+  } catch (e) {
+    showErr('mfa-setup-err', e.message);
+    $('mfa-setup-code').value = '';
+    $('mfa-setup-code').focus();
+  }
+}
+
+async function doVerifyMFA() {
+  clearErr('mfa-verify-err');
+  const code = $('mfa-verify-code').value;
+  if (code.length !== 6) return showErr('mfa-verify-err', 'Please enter the 6-digit code from your app.');
+  try {
+    await api('POST', '/api/auth/verify-mfa', { code });
+    currentUser = await api('GET', '/api/auth/me');
+    await loadApp();
+  } catch (e) {
+    showErr('mfa-verify-err', e.message);
+    $('mfa-verify-code').value = '';
+    $('mfa-verify-code').focus();
+  }
+}
+
+async function doLogout() {
+  await api('POST', '/api/auth/logout').catch(() => {});
+  currentUser = null;
+  calcData = null;
+  $('results').classList.remove('visible');
+  showView('view-login');
+}
+
+// ── App load ──────────────────────────────────────────────────────
+async function loadApp() {
+  showView('view-app');
+  $('app-username').textContent = currentUser.username;
+  const [people, bills] = await Promise.all([
+    api('GET', '/api/people'),
+    api('GET', '/api/bills'),
+  ]);
+  renderIncome(people);
+  renderBills(bills);
+}
+
+// ── Income ────────────────────────────────────────────────────────
+function renderIncome(people) {
+  const grid = $('income-grid');
+  grid.innerHTML = people.map(p => `
+    <div class="person-block">
+      <div class="person-label">Person ${p.slot}</div>
+      <div class="field-row">
+        <label class="field-hint" for="name${p.slot}">Name</label>
+        <input type="text" id="name${p.slot}" value="${esc(p.name)}" placeholder="e.g. Alex"
+               oninput="debounceSavePerson(${p.slot})" />
+      </div>
+      <div class="field-row">
+        <label class="field-hint" for="pay${p.slot}">Take-home pay per paycheck ($)</label>
+        <input type="number" id="pay${p.slot}" value="${p.paycheck || ''}" placeholder="0.00"
+               min="0" step="0.01" oninput="debounceSavePerson(${p.slot})" />
+      </div>
+      <div class="field-row">
+        <label class="field-hint" for="freq${p.slot}">Pay frequency</label>
+        <select id="freq${p.slot}" onchange="debounceSavePerson(${p.slot})">
+          <option value="52"  ${p.frequency===52 ?'selected':''}>Weekly (52×/yr)</option>
+          <option value="26"  ${p.frequency===26 ?'selected':''}>Bi-weekly (26×/yr)</option>
+          <option value="24"  ${p.frequency===24 ?'selected':''}>Semi-monthly (24×/yr)</option>
+          <option value="12"  ${p.frequency===12 ?'selected':''}>Monthly (12×/yr)</option>
+        </select>
+      </div>
+    </div>
+  `).join('');
+}
+
+function debounceSavePerson(slot) {
+  invalidateResults();
+  clearTimeout(incomeTimers[slot]);
+  incomeTimers[slot] = setTimeout(() => savePerson(slot), 600);
+}
+
+async function savePerson(slot) {
+  setSaveState('income-save-ind', 'saving', 'Saving…');
+  try {
+    await api('PUT', '/api/people', {
+      slot,
+      name:      $(`name${slot}`).value.trim(),
+      paycheck:  parseFloat($(`pay${slot}`).value) || 0,
+      frequency: parseInt($(`freq${slot}`).value),
+    });
+    setSaveState('income-save-ind', 'saved', 'Saved ✓');
+  } catch (e) {
+    setSaveState('income-save-ind', '', `Error: ${e.message}`);
+  }
+}
+
+// ── Bills ─────────────────────────────────────────────────────────
+let billEls = {};   // id → DOM element, for animation/tracking
+
+function renderBills(bills) {
+  const list = $('bills-list');
+  list.innerHTML = '';
+  bills.forEach(b => addBillRow(b));
+}
+
+function addBillRow(bill = null) {
+  const tmpId = bill ? bill.id : 'new_' + Date.now();
+  const list  = $('bills-list');
+  const row   = document.createElement('div');
+  row.className = 'bill-row';
+  row.id = `bill-row-${tmpId}`;
+  row.innerHTML = `
+    <input type="text"   id="bname-${tmpId}"  placeholder="Bill name"   value="${esc(bill?.name ?? '')}"
+           oninput="debounceSaveBill('${tmpId}')" />
+    <input type="number" id="bamt-${tmpId}"   placeholder="Amount" value="${bill?.amount ?? ''}"
+           min="0" step="0.01" oninput="debounceSaveBill('${tmpId}')" />
+    <select id="bfreq-${tmpId}" onchange="debounceSaveBill('${tmpId}')">
+      <option value="monthly"   ${bill?.frequency==='monthly'  ?'selected':''}>Monthly</option>
+      <option value="quarterly" ${bill?.frequency==='quarterly'?'selected':''}>Quarterly</option>
+      <option value="yearly"    ${bill?.frequency==='yearly'   ?'selected':''}>Yearly</option>
+    </select>
+    <button class="btn-remove" onclick="deleteBill('${tmpId}')" title="Remove">✕</button>
+  `;
+  row.dataset.serverId = bill ? bill.id : '';
+  list.appendChild(row);
+}
+
+async function addBill() {
+  invalidateResults();
+  // Create on server immediately with placeholder, then let debounce save edits
+  try {
+    const b = await api('POST', '/api/bills', { name: 'New Bill', amount: 0, frequency: 'monthly' });
+    addBillRow(b);
+    // Focus the name field of the new row
+    setTimeout(() => {
+      const input = document.getElementById(`bname-${b.id}`);
+      if (input) { input.focus(); input.select(); }
+    }, 50);
+  } catch (e) { alert(e.message); }
+}
+
+function debounceSaveBill(tmpId) {
+  invalidateResults();
+  clearTimeout(billTimers[tmpId]);
+  billTimers[tmpId] = setTimeout(() => saveBill(tmpId), 600);
+}
+
+async function saveBill(tmpId) {
+  const row      = $(`bill-row-${tmpId}`);
+  if (!row) return;
+  const serverId = row.dataset.serverId;
+  if (!serverId) return;  // shouldn't happen with current flow
+  const name     = $(`bname-${tmpId}`).value.trim();
+  const amount   = parseFloat($(`bamt-${tmpId}`).value) || 0;
+  const frequency = $(`bfreq-${tmpId}`).value;
+  if (!name) return;
+
+  setSaveState('bills-save-ind', 'saving', 'Saving…');
+  try {
+    await api('PUT', `/api/bills/${serverId}`, { name, amount, frequency });
+    setSaveState('bills-save-ind', 'saved', 'Saved ✓');
+  } catch (e) {
+    setSaveState('bills-save-ind', '', `Error: ${e.message}`);
+  }
+}
+
+async function deleteBill(tmpId) {
+  const row      = $(`bill-row-${tmpId}`);
+  const serverId = row?.dataset.serverId;
+  if (serverId) {
+    try { await api('DELETE', `/api/bills/${serverId}`); } catch (e) { alert(e.message); return; }
+  }
+  row?.remove();
+  invalidateResults();
+}
+
+// ── Calculate ─────────────────────────────────────────────────────
+async function calculate() {
+  try {
+    calcData = await api('GET', '/api/calculate');
+  } catch (e) {
+    alert(e.message); return;
+  }
+  renderResults();
+  $('results').classList.add('visible');
+  setTimeout(() => $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  $('toggle-monthly').classList.toggle('active',  mode === 'monthly');
+  $('toggle-paycheck').classList.toggle('active', mode === 'paycheck');
+  if (calcData) renderResults();
+}
+
+function invalidateResults() {
+  calcData = null;
+  $('results').classList.remove('visible');
+}
+
+function renderResults() {
+  if (!calcData) return;
+  const d   = calcData;
+  const p1  = d.people[0], p2 = d.people[1];
+  const isPaycheck = viewMode === 'paycheck';
+
+  // ── Ratio bar
+  $('ratio-bar').innerHTML = `
+    <div class="ratio-label">
+      <span>${esc(p1.name||'Person 1')} — ${(p1.pct*100).toFixed(1)}%</span>
+      <span>${(p2.pct*100).toFixed(1)}% — ${esc(p2.name||'Person 2')}</span>
+    </div>
+    <div class="ratio-bar"><div class="ratio-fill" style="width:${p1.pct*100}%"></div></div>
+  `;
+
+  // ── Result cards
+  const freqLabel1 = freqName(p1.frequency);
+  const freqLabel2 = freqName(p2.frequency);
+  $('results-grid').innerHTML = [
+    resultCard(p1, isPaycheck, freqLabel1),
+    resultCard(p2, isPaycheck, freqLabel2),
+  ].join('');
+
+  // ── Breakdown table headers
+  $('hdr1').textContent = p1.name || 'Person 1';
+  $('hdr2').textContent = p2.name || 'Person 2';
+
+  // ── Breakdown rows
+  const tbody = $('breakdown-body');
+  tbody.innerHTML = '';
+  d.bills.forEach(b => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(b.name)}<span class="freq-badge">${b.frequency}</span></td>
+      <td>${fmt(b.monthly_amount)}</td>
+      <td>${fmt(b.share1)}</td>
+      <td>${fmt(b.share2)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // ── Totals
+  $('breakdown-foot').innerHTML = `
+    <tr>
+      <td>Total / month</td>
+      <td>${fmt(d.total_monthly)}</td>
+      <td>${fmt(p1.contrib_monthly)}</td>
+      <td>${fmt(p2.contrib_monthly)}</td>
+    </tr>
+    <tr>
+      <td style="color:var(--muted);font-size:.78rem">Annual total</td>
+      <td style="color:var(--muted);font-size:.78rem">${fmt(d.total_annual)}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
+
+  // ── Notice
+  $('notice-box').innerHTML = `
+    Contributions split <strong style="color:var(--cream)">proportionally by income</strong>
+    (${esc(p1.name||'P1')}: ${fmt(p1.monthly_income)}/mo ·
+     ${esc(p2.name||'P2')}: ${fmt(p2.monthly_income)}/mo).
+    ${isPaycheck
+      ? 'Showing <strong style="color:var(--cream)">per-paycheck</strong> deposit amounts — transfer this each pay period into your shared account.'
+      : 'Showing <strong style="color:var(--cream)">monthly</strong> totals — transfer this once a month into your shared account.'}
+  `;
+}
+
+function resultCard(p, isPaycheck, freqLabel) {
+  const amount  = isPaycheck ? p.contrib_paycheck : p.contrib_monthly;
+  const label   = isPaycheck ? `per ${freqLabel} paycheck` : 'per month to shared account';
+  const monthly = isPaycheck ? `(${fmt(p.contrib_monthly)}/mo)` : '';
+  const remain  = p.monthly_income - p.contrib_monthly;
+
+  return `
+    <div class="result-card">
+      <div class="result-name">${esc(p.name || 'Person ' + p.slot)}</div>
+      <div class="result-amount"><span class="sym">$</span>${fmtNum(amount)}</div>
+      <div class="result-sub">${label} ${monthly}</div>
+      <div class="result-pct">↳ ${(p.pct*100).toFixed(1)}% of income · ${fmt(remain)} remaining/mo</div>
+    </div>
+  `;
+}
+
+function fmtNum(n) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function freqName(freq) {
+  return { 52: 'weekly', 26: 'bi-weekly', 24: 'semi-monthly', 12: 'monthly' }[freq] || '';
+}
+
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Save indicator ────────────────────────────────────────────────
+let saveTimer = {};
+function setSaveState(id, cls, text) {
+  const el = $(id);
+  el.className = `save-indicator ${cls}`;
+  el.textContent = text;
+  clearTimeout(saveTimer[id]);
+  if (cls === 'saved') saveTimer[id] = setTimeout(() => { el.className = 'save-indicator'; }, 2500);
+}
+</script>
+</body>
+</html>

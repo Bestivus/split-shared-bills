@@ -1,0 +1,90 @@
+# ────────────────────────────────────────────────────────────────────
+# docker-stack.yml — Docker Swarm deployment for Split
+#
+# IMPORTANT: SQLite cannot safely handle concurrent writers across
+# multiple replicas. Keep replicas=1. If you need HA, migrate to
+# PostgreSQL and increase replicas at that time.
+#
+# First-time deploy:
+#   1. Create Docker secrets (see README)
+#   2. docker stack deploy -c docker-stack.yml split
+#
+# Rolling update after new image push:
+#   docker service update --image ghcr.io/YOUR_GH_USER/shared-bills-app:latest split_web
+#
+# Remove stack:
+#   docker stack rm split
+# ────────────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+  web:
+    image: ghcr.io/${GITHUB_USER:-your-gh-username}/shared-bills-app:${IMAGE_TAG:-latest}
+    ports:
+      - target: 8080
+        published: 3000
+        protocol: tcp
+        mode: ingress
+    environment:
+      DB_PATH: /data/split.db
+      TOKEN_HOURS: "24"
+      SECURE_COOKIE: "false"
+    secrets:
+      - split_secret_key
+      - split_user1_username
+      - split_user1_password
+      - split_user2_username
+      - split_user2_password
+    volumes:
+      - split_data:/data
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+    networks:
+      - split_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  split_net:
+    driver: overlay
+    attachable: true
+
+volumes:
+  split_data:
+    driver: local
+
+secrets:
+  split_secret_key:
+    external: true
+  split_user1_username:
+    external: true
+  split_user1_password:
+    external: true
+  split_user2_username:
+    external: true
+  split_user2_password:
+    external: true

@@ -1,6 +1,7 @@
 # Split — Shared Expense Calculator
 
-A full-stack web app for two people to track shared bills, with income-proportional contribution splitting, persistent shared data, and secure authentication.
+A full-stack web app for two people to track shared bills, with income-proportional
+contribution splitting, persistent shared data, and secure authentication.
 
 ---
 
@@ -8,7 +9,7 @@ A full-stack web app for two people to track shared bills, with income-proportio
 
 - **Authentication** — username + password with TOTP two-factor authentication (Google Authenticator / Authy)
 - **Shared data** — SQLite database; both users always see the same people, bills, and figures
-- **Persistent storage** — data survives container restarts via Docker volume
+- **Persistent storage** — data survives container restarts via a named Docker volume
 - **Auto-save** — income and bill changes are debounced and saved automatically
 - **Bill frequencies** — monthly, quarterly, and yearly bills (all normalized to monthly for comparison)
 - **Contribution toggle** — switch results between monthly and per-paycheck deposit amounts
@@ -26,19 +27,52 @@ shared-bills-app/
 │       └── index.html        # Single-page frontend (HTML + CSS + JS)
 ├── requirements.txt
 ├── Dockerfile                # Python 3.12-slim → uvicorn
-├── docker-stack.yml          # Docker Swarm deployment + secrets + volume
+├── docker-stack.yml          # Stack definition for Portainer
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml        # Build → GHCR → SSH deploy
+│       └── deploy.yml        # Builds image and pushes to GHCR on every push to main
 └── README.md
 ```
+
+---
+
+## Development Workflow
+
+### 1. Edit code in VS Code
+
+Make your changes locally. The integrated terminal (`Ctrl+\``) is useful for
+running the app locally before pushing (see Local Development below).
+
+### 2. Push with GitHub Desktop
+
+- Open GitHub Desktop
+- Your changed files will appear automatically under **Changes**
+- Write a short summary in the description box (e.g. "Add electric bill")
+- Click **Commit to main**, then **Push origin**
+
+### 3. GitHub Actions builds the image
+
+Every push to `main` triggers the workflow in `.github/workflows/deploy.yml`.
+It builds the Docker image and pushes it to **GitHub Container Registry (GHCR)**
+at `ghcr.io/YOUR_USERNAME/shared-bills-app:latest`.
+
+Watch it run under the **Actions** tab on your GitHub repo. A green checkmark
+means the image is ready to pull.
+
+### 4. Portainer deploys the update
+
+Once the image is pushed, go to Portainer and either:
+- **Swarm stack** — update the stack and Portainer will pull the new image
+- **Standalone stack** — re-pull the image and recreate the container
+
+See the Portainer Deployment section below for first-time setup.
 
 ---
 
 ## Local Development
 
 ```bash
-# Install deps
+# Install dependencies
 pip install -r requirements.txt
 
 # Set credentials
@@ -55,114 +89,86 @@ uvicorn main:app --reload --port 8080
 # → http://localhost:8080
 ```
 
-On first run the database is created and users are seeded. Navigate to the app,
-log in, and you will be prompted to set up MFA with your authenticator app.
+On first run the database is created and both users are seeded. Log in and
+you will be prompted to set up MFA with your authenticator app.
 
 ---
 
-## Docker (local test)
+## Portainer Deployment
 
-```bash
-docker build -t split .
+### Make the GHCR image accessible
 
-docker run -p 3000:8080 \
-  -e USER1_USERNAME=alice \
-  -e USER1_PASSWORD=changeme1 \
-  -e USER2_USERNAME=bob \
-  -e USER2_PASSWORD=changeme2 \
-  -e SECRET_KEY=$(openssl rand -hex 32) \
-  -v split_data:/data \
-  split
+After your first push, the package on GHCR is private by default. You have two options:
 
-# → http://localhost:3000
-```
+**Option A — Make it public (simplest for a home lab)**
+Go to `github.com → YOUR_USERNAME → Packages → shared-bills-app →
+Package settings → Change visibility → Public`.
+Portainer can then pull it with no credentials.
 
----
-
-## Docker Swarm Deployment
-
-### 1. Initialize Swarm (one-time, if not already done)
-
-```bash
-docker swarm init
-```
-
-### 2. Create Docker Secrets
-
-Secrets are never stored in the stack file or environment variables —
-they are injected securely at runtime by Swarm:
-
-```bash
-# Random signing key for JWT tokens
-printf "$(openssl rand -hex 32)" | docker secret create split_secret_key -
-
-# User credentials
-printf "alice"        | docker secret create split_user1_username -
-printf "s3cr3tpass1"  | docker secret create split_user1_password -
-printf "bob"          | docker secret create split_user2_username -
-printf "s3cr3tpass2"  | docker secret create split_user2_password -
-```
-
-> Use `printf` (not `echo`) to avoid a trailing newline in the secret value.
-
-### 3. Deploy
-
-```bash
-GITHUB_USER=your-gh-username \
-  docker stack deploy -c docker-stack.yml split
-```
-
-### 4. Verify
-
-```bash
-docker service ls
-docker service logs -f split_web
-```
-
-Access the app at `http://<swarm-node>:3000`
-
-### Useful Commands
-
-```bash
-# Watch a rolling update in progress
-docker service ps split_web
-
-# Force re-deploy with the latest image
-docker service update \
-  --image ghcr.io/YOUR_USER/shared-bills-app:latest split_web
-
-# Remove the stack (keeps the volume and data intact)
-docker stack rm split
-
-# Remove the data volume as well
-docker volume rm split_split_data
-```
+**Option B — Keep it private and add a registry credential in Portainer**
+In Portainer go to **Registries → Add registry → GitHub Container Registry**
+and enter your GitHub username and a Personal Access Token (PAT) with
+`read:packages` scope. Create a PAT at `github.com → Settings →
+Developer settings → Personal access tokens`.
 
 ---
 
-## GitHub Actions CI/CD
+### Docker Swarm stack (via Portainer)
 
-On every push to `main` the workflow:
-1. Builds the Docker image
-2. Pushes it to **GitHub Container Registry** (`ghcr.io`)
-3. SCPs `docker-stack.yml` to your Swarm manager
-4. SSH's in and runs `docker stack deploy`
+In Portainer, go to your Swarm environment → **Stacks → Add stack →
+Repository** (or paste the contents of `docker-stack.yml` directly).
 
-### Required GitHub Secrets
+Before deploying, create the five Docker secrets Portainer's Swarm
+environment needs. In Portainer go to **Secrets → Add secret**:
 
-Go to **Settings → Secrets and variables → Actions → New repository secret**:
+| Secret name | Value |
+|-------------|-------|
+| `split_secret_key` | Output of `openssl rand -hex 32` |
+| `split_user1_username` | First person's username |
+| `split_user1_password` | First person's password |
+| `split_user2_username` | Second person's username |
+| `split_user2_password` | Second person's password |
 
-| Secret | Value |
-|--------|-------|
-| `SWARM_HOST` | IP or hostname of your Swarm manager |
-| `SWARM_USER` | SSH username (e.g. `ubuntu`) |
-| `SWARM_SSH_KEY` | Full private SSH key (`cat ~/.ssh/id_ed25519`) |
-| `SWARM_SSH_PORT` | SSH port, usually `22` |
+Then deploy the stack. The SQLite data is stored in the `split_data` volume
+which Portainer will create automatically.
 
-### Make the image public (optional)
+> **Replicas**: Keep `replicas: 1` in `docker-stack.yml`. SQLite cannot handle
+> concurrent writes from multiple containers. One replica is plenty for two users.
 
-After the first push: **ghcr.io → your package → Package settings →
-Change visibility → Public**. This lets your Swarm pull without authentication.
+---
+
+### Standalone container (via Portainer)
+
+If you are running this on a standalone Docker host rather than Swarm,
+go to **Containers → Add container** and fill in:
+
+- **Image**: `ghcr.io/YOUR_USERNAME/shared-bills-app:latest`
+- **Port mapping**: host `3000` → container `8080`
+- **Volumes**: create a volume named `split_data` mapped to `/data`
+- **Env variables**:
+
+| Variable | Value |
+|----------|-------|
+| `USER1_USERNAME` | First person's username |
+| `USER1_PASSWORD` | First person's password |
+| `USER2_USERNAME` | Second person's username |
+| `USER2_PASSWORD` | Second person's password |
+| `SECRET_KEY` | Output of `openssl rand -hex 32` |
+| `DB_PATH` | `/data/split.db` |
+
+Click **Deploy the container**. Access the app at `http://<host-ip>:3000`.
+
+---
+
+### Updating to a new version
+
+Once the GitHub Actions build completes:
+
+**Swarm (Portainer)** — go to your stack → **Editor** → click **Update the stack**.
+Portainer pulls the new `latest` image and does a rolling restart.
+
+**Standalone (Portainer)** — go to the container → **Recreate** → check
+**Re-pull image** → confirm. The volume keeps your data safe across the recreate.
 
 ---
 
@@ -194,12 +200,12 @@ Annual income  = paycheck × pay_frequency
 Share %        = person_annual / (p1_annual + p2_annual)
 
 Bill → monthly :
-  monthly   →  amount  × 1
-  quarterly →  amount  × (1/3)
-  yearly    →  amount  × (1/12)
+  monthly   →  amount × 1
+  quarterly →  amount × (1/3)
+  yearly    →  amount × (1/12)
 
-Monthly contribution   = Σ(bill_monthly) × share %
-Per-paycheck deposit   = monthly_contribution × 12 / pay_frequency
+Monthly contribution  = Σ(bill_monthly) × share %
+Per-paycheck deposit  = monthly_contribution × 12 / pay_frequency
 ```
 
 ---
@@ -209,27 +215,17 @@ Per-paycheck deposit   = monthly_contribution × 12 / pay_frequency
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `DB_PATH` | `/data/split.db` | SQLite file path |
-| `SECRET_KEY` | random | JWT signing key — **must be set persistently** |
+| `SECRET_KEY` | random | JWT signing key — **must be set to a stable value** |
 | `TOKEN_HOURS` | `24` | Session duration in hours |
-| `SECURE_COOKIE` | `false` | Set `true` behind an HTTPS reverse proxy |
+| `SECURE_COOKIE` | `false` | Set `true` when behind an HTTPS reverse proxy |
 | `USER1_USERNAME` | — | First user's username |
 | `USER1_PASSWORD` | — | First user's password (hashed on first start) |
 | `USER2_USERNAME` | — | Second user's username |
 | `USER2_PASSWORD` | — | Second user's password |
 
-Every variable also accepts a `_FILE` suffix pointing to a Docker Secret
-(e.g. `SECRET_KEY_FILE=/run/secrets/split_secret_key`).
+Every variable also accepts a `_FILE` suffix pointing to a Docker Secret file
+(e.g. `SECRET_KEY_FILE=/run/secrets/split_secret_key`), which is how the
+Swarm stack passes them in.
 
 > **Important**: `SECRET_KEY` must be a stable value. If it changes,
 > all active sessions are invalidated and everyone must log in again.
-
----
-
-## SQLite & Replicas
-
-SQLite uses file locking and cannot safely handle multiple concurrent
-writers across containers. `replicas: 1` is intentional. One replica
-is comfortably sufficient for two users.
-
-To scale horizontally later, swap `sqlite3` for `asyncpg` / SQLAlchemy
-with a PostgreSQL service in the stack file and increase `replicas`.

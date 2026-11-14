@@ -12,3 +12,7 @@ pyvenv.cfg
 # Local Databases
 *.db
 *.db-journal
+
+# Claude Code local settings (may contain approved commands with secrets)
+.claude/settings.local.json
+CLAUDE.local.md
